@@ -3,7 +3,7 @@
  * Plugin Name: sono media イベント
  * Plugin URI:  https://media.sono-music.com/
  * Description: sono media に掲載した自分のイベントの一覧を、ショートコード [sono_events] でサイトに表示します。イベントを追加・公開・非公開にすると自動で反映されます。
- * Version:     1.0.0
+ * Version:     1.0.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author:      sono
@@ -50,7 +50,7 @@ if ( ! class_exists( 'Sono_Media_Events' ) ) :
 
 final class Sono_Media_Events {
 
-	const VERSION = '1.0.0';
+	const VERSION = '1.0.1';
 
 	/** 設定を1つの option にまとめる（増えたときに option が散らからないように） */
 	const OPTION = 'sono_media_events_settings';
@@ -464,6 +464,11 @@ final class Sono_Media_Events {
 				別のプロフィールのイベントを表示する場合（レーベルのサイトなど）は、そのプロフィールのURLの末尾（<code>/users/</code> 以降の部分）を <code>slug</code> に指定します。
 			</p>
 			<p><code>[sono_events slug="○○○"]</code></p>
+			<p>ご自身が投稿したイベントだけを表示する場合:</p>
+			<p><code>[sono_events related="false"]</code></p>
+			<p class="description">
+				<code>related="false"</code> を指定すると、関連ユーザーとして登録されたイベントを表示しません。
+			</p>
 		</div>
 		<?php
 	}
@@ -799,7 +804,7 @@ final class Sono_Media_Events {
 	/**
 	 * ショートコード本体。
 	 *
-	 * @param array $atts slug / limit / columns / paged / past
+	 * @param array $atts slug / limit / columns / paged / past / related
 	 * @return string HTML。出せるものが何も無ければ空文字。
 	 */
 	public static function shortcode( $atts ) {
@@ -812,6 +817,8 @@ final class Sono_Media_Events {
 				'paged'   => 'false',
 				// 終わったイベントを出すか。既定は今後のイベント
 				'past'    => 'false',
+				// 関連ユーザーとして登録されたイベントを含めるか。既定は含める
+				'related' => 'true',
 			),
 			$atts,
 			'sono_events'
@@ -827,6 +834,8 @@ final class Sono_Media_Events {
 		$columns = self::clamp( (int) $atts['columns'], 3, 1, 6 );
 		$paged   = self::truthy( $atts['paged'] );
 		$past    = self::truthy( $atts['past'] );
+		// ★ 'false' / '0' / 'no' / 'off' のときだけ除外する。それ以外（空・不正な値）は既定の「含める」
+		$related = ! self::falsy( $atts['related'] );
 
 		// ★ ページ番号は会員のサイトのURL（?sono_events_page=2）から読む。
 		//   ページ送りを出さない指定のときは読まない——同じページに複数の一覧を
@@ -836,7 +845,7 @@ final class Sono_Media_Events {
 			$page = max( 1, (int) $_GET[ self::PAGE_QUERY ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		}
 
-		$data = self::get_data( $slug, $limit, $page, $past );
+		$data = self::get_data( $slug, $limit, $page, $past, $related );
 		if ( empty( $data['events'] ) ) {
 			// ★ 最後の砦。出せないならエラー文言も出さず、静かに何も出さない
 			return '';
@@ -846,7 +855,11 @@ final class Sono_Media_Events {
 	}
 
 	private static function truthy( $value ) {
-		return in_array( strtolower( (string) $value ), array( 'true', '1', 'yes', 'on' ), true );
+		return in_array( strtolower( trim( (string) $value ) ), array( 'true', '1', 'yes', 'on' ), true );
+	}
+
+	private static function falsy( $value ) {
+		return in_array( strtolower( trim( (string) $value ) ), array( 'false', '0', 'no', 'off' ), true );
 	}
 
 	private static function render_grid( $data, $columns, $paged = false ) {
@@ -1083,7 +1096,7 @@ final class Sono_Media_Events {
 	 *
 	 * @return array 常に normalize_data() の形
 	 */
-	public static function get_data( $slug, $limit, $page = 1, $past = false ) {
+	public static function get_data( $slug, $limit, $page = 1, $past = false, $related = true ) {
 		$empty = self::normalize_data( array() );
 		if ( '' === $slug ) {
 			return $empty;
@@ -1097,9 +1110,11 @@ final class Sono_Media_Events {
 		//   同じ内容を別々にキャッシュすることになる。
 		$limit = self::clamp( (int) $limit, self::DEFAULT_LIMIT, 1, self::MAX_LIMIT );
 		$past  = (bool) $past;
+		// ★ related の有無で内容が違うので、鍵・控え・帳簿のすべてに混ぜる（下の variant）
+		$related = (bool) $related;
 
-		$transient_key = self::transient_key( $slug, $limit, $page, $past );
-		$option_key    = self::option_key( $slug, $limit, $page, $past );
+		$transient_key = self::transient_key( $slug, $limit, $page, $past, $related );
+		$option_key    = self::option_key( $slug, $limit, $page, $past, $related );
 
 		$cached = get_transient( $transient_key );
 		// ★ 'redirect' を持つ配列は「このページ番号は、そのページに丸められた」という
@@ -1108,13 +1123,13 @@ final class Sono_Media_Events {
 		//   wp_options に文字列で入り、別のリクエストから読むと int でなく string が
 		//   返るため、型の判定が外れて毎回 API を叩くことになる。配列なら往復しても形が残る。
 		if ( is_array( $cached ) && isset( $cached['redirect'] ) && ! isset( $cached['events'] ) ) {
-			$cached = get_transient( self::transient_key( $slug, $limit, max( 1, (int) $cached['redirect'] ), $past ) );
+			$cached = get_transient( self::transient_key( $slug, $limit, max( 1, (int) $cached['redirect'] ), $past, $related ) );
 		}
 		if ( is_array( $cached ) ) {
 			return self::normalize_data( $cached );
 		}
 
-		$fetched = self::fetch( $slug, $limit, $page, $past );
+		$fetched = self::fetch( $slug, $limit, $page, $past, $related );
 		if ( is_array( $fetched ) ) {
 			// ★★ **要求されたページ番号の鍵で保存しない。丸められた先の鍵に入れる。**
 			//   ページ番号は訪問者が URL（?sono_events_page=）で自由に動かせる。
@@ -1129,8 +1144,8 @@ final class Sono_Media_Events {
 				//   ?sono_events_page=999 のような範囲外の番号は毎回キャッシュに当たらず、
 				//   訪問のたびに API を叩く。印は小さな配列1つなので、行が増えても軽い。
 				set_transient( $transient_key, array( 'redirect' => $store_page ), self::CACHE_MINUTES * MINUTE_IN_SECONDS );
-				$transient_key = self::transient_key( $slug, $limit, $store_page, $past );
-				$option_key    = self::option_key( $slug, $limit, $store_page, $past );
+				$transient_key = self::transient_key( $slug, $limit, $store_page, $past, $related );
+				$option_key    = self::option_key( $slug, $limit, $store_page, $past, $related );
 			}
 			set_transient( $transient_key, $fetched, self::CACHE_MINUTES * MINUTE_IN_SECONDS );
 
@@ -1145,16 +1160,20 @@ final class Sono_Media_Events {
 			//   2ページ目以降の控えが残っていると、障害のときにそこだけ復活する。
 			if ( ! empty( $fetched['events'] ) ) {
 				update_option( $option_key, $fetched, false );
-				self::remember_last( $slug, $past, $option_key );
+				self::remember_last( $slug, $past, $option_key, $related );
 			} elseif ( ! empty( $fetched['profileUrl'] ) ) {
-				self::purge_last( $slug, $past );
+				self::purge_last( $slug, $past, $related );
 				update_option( $option_key, $fetched, false );
-				self::remember_last( $slug, $past, $option_key );
+				self::remember_last( $slug, $past, $option_key, $related );
 			} elseif ( ! empty( $fetched['missing'] ) ) {
 				// ★ プロフィール自体が非公開・削除になったと確かめられたら、今後・過去の
 				//   両方の控えを消す。公開をやめた人の情報が、障害のたびに戻らないようにする。
-				self::purge_last( $slug, false );
-				self::purge_last( $slug, true );
+				// related の有無も両方消す。
+				foreach ( array( false, true ) as $p ) {
+					foreach ( array( true, false ) as $r ) {
+						self::purge_last( $slug, $p, $r );
+					}
+				}
 			}
 			return self::normalize_data( $fetched );
 		}
@@ -1176,14 +1195,19 @@ final class Sono_Media_Events {
 	 * @return array|null 成功時は normalize_data() の形（プロフィールが無いと確かめられた
 	 *                    ときは profileUrl が null で missing が真）。失敗時 null。
 	 */
-	private static function fetch( $slug, $limit, $page = 1, $past = false ) {
+	private static function fetch( $slug, $limit, $page = 1, $past = false, $related = true ) {
+		$args = array(
+			'slug'  => $slug,
+			'limit' => (int) $limit,
+			'page'  => max( 1, (int) $page ),
+			'past'  => $past ? '1' : '0',
+		);
+		// ★ 既定（含める）のときは付けない。related を知らない古い API には、従来と同じ要求を送る。
+		if ( ! $related ) {
+			$args['related'] = '0';
+		}
 		$url = add_query_arg(
-			array(
-				'slug'  => $slug,
-				'limit' => (int) $limit,
-				'page'  => max( 1, (int) $page ),
-				'past'  => $past ? '1' : '0',
-			),
+			$args,
 			self::origin() . '/wp-json/sono/v1/events/public'
 		);
 
@@ -1331,8 +1355,8 @@ final class Sono_Media_Events {
 	}
 
 	/** この ID（今後/過去ごと）の控えの option 名を覚えておく帳簿の鍵 */
-	private static function last_index_key( $slug, $past ) {
-		return self::CACHE_PREFIX . md5( $slug . '|' . ( $past ? 'p' : 'u' ) ) . '_idx';
+	private static function last_index_key( $slug, $past, $related = true ) {
+		return self::CACHE_PREFIX . md5( $slug . '|' . self::variant( $past, $related ) ) . '_idx';
 	}
 
 	/**
@@ -1342,8 +1366,8 @@ final class Sono_Media_Events {
 	 *   あるが、落ちた控えは次にそのページを取得したときに帳簿へ足し直される（自己修復する）
 	 *   ので、このままにしてある。ロックを入れるほどの害ではない。
 	 */
-	private static function remember_last( $slug, $past, $option_key ) {
-		$key  = self::last_index_key( $slug, $past );
+	private static function remember_last( $slug, $past, $option_key, $related = true ) {
+		$key  = self::last_index_key( $slug, $past, $related );
 		$list = get_option( $key, array() );
 		$list = is_array( $list ) ? $list : array();
 		if ( ! in_array( $option_key, $list, true ) ) {
@@ -1353,8 +1377,8 @@ final class Sono_Media_Events {
 	}
 
 	/** この ID（今後/過去のどちらか）の控えを、ページ・件数を問わず全部消す */
-	private static function purge_last( $slug, $past ) {
-		$key  = self::last_index_key( $slug, $past );
+	private static function purge_last( $slug, $past, $related = true ) {
+		$key  = self::last_index_key( $slug, $past, $related );
 		$list = get_option( $key, array() );
 		if ( is_array( $list ) ) {
 			foreach ( $list as $option_key ) {
@@ -1372,11 +1396,21 @@ final class Sono_Media_Events {
 	}
 
 	/**
+	 * 今後/過去と、関連ユーザーのイベントを含めるかの組み合わせを表す印。
+	 *
+	 * ★ 含める（既定）の印は従来の 'p' / 'u' のまま。1.0.0 で作られた
+	 *   キャッシュと控えがそのまま使え、含めない指定（'pn' / 'un'）とは鍵が分かれる。
+	 */
+	private static function variant( $past, $related ) {
+		return ( $past ? 'p' : 'u' ) . ( $related ? '' : 'n' );
+	}
+
+	/**
 	 * 10分で切れるほうの鍵。**世代を混ぜる**ので、世代を進めれば全部が無効になる。
 	 */
-	private static function transient_key( $slug, $limit, $page, $past ) {
+	private static function transient_key( $slug, $limit, $page, $past, $related = true ) {
 		return self::CACHE_PREFIX . md5(
-			self::cache_version() . '|' . $slug . '|' . (int) $limit . '|' . (int) $page . '|' . ( $past ? 'p' : 'u' )
+			self::cache_version() . '|' . $slug . '|' . (int) $limit . '|' . (int) $page . '|' . self::variant( $past, $related )
 		);
 	}
 
@@ -1385,8 +1419,8 @@ final class Sono_Media_Events {
 	 * 混ぜると「更新」を押した直後に sono media が落ちていたとき、保険まで
 	 * 巻き添えで消えて何も出せなくなる。
 	 */
-	private static function option_key( $slug, $limit, $page, $past ) {
-		return self::CACHE_PREFIX . md5( $slug . '|' . (int) $limit . '|' . (int) $page . '|' . ( $past ? 'p' : 'u' ) ) . '_last';
+	private static function option_key( $slug, $limit, $page, $past, $related = true ) {
+		return self::CACHE_PREFIX . md5( $slug . '|' . (int) $limit . '|' . (int) $page . '|' . self::variant( $past, $related ) ) . '_last';
 	}
 
 	/**

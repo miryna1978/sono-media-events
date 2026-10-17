@@ -41,6 +41,7 @@ URL は `https://media.sono-music.com/users/○○○` の形式です。末尾�
 | `columns` | `3` | 列数 |
 | `paged` | `false` | `true` にするとページ送りを表示します |
 | `past` | `false` | `true` にすると終了したイベントを新しい順に表示します |
+| `related` | `true` | `false` にすると、関連ユーザーとして登録されたイベントを表示しません（ご自身が投稿したイベントだけを表示します） |
 | `slug` | 設定画面のプロフィール | 別のプロフィールのイベントを表示します |
 
 ### 記述例
@@ -63,6 +64,12 @@ URL は `https://media.sono-music.com/users/○○○` の形式です。末尾�
 [sono_events past="true" paged="true"]
 ```
 
+ご自身が投稿したイベントだけを表示する場合:
+
+```
+[sono_events related="false"]
+```
+
 別のプロフィールのイベントを表示する場合（レーベルのサイトなど）は、そのプロフィールのURLの末尾（`/users/` 以降の部分）を `slug` に指定します。
 
 ```
@@ -81,7 +88,11 @@ URL は `https://media.sono-music.com/users/○○○` の形式です。末尾�
 - ご自身が sono media に投稿したイベント（運営が代理で掲載したものを含みます）
 - ほかの利用者が投稿したイベントのうち、ご自身が関連ユーザーに登録されたイベント（非表示に設定したものを除きます）
 
-関連ユーザーに登録されたイベントは、標準で一覧に表示されます。表示しない場合は、sono media のアカウント画面（<https://media.sono-music.com/account/>）のイベントタブにある「関連ユーザーに登録されたイベント」で「非表示にする」ボタンを押してください。「表示する」ボタンで元に戻せます。
+関連ユーザーに登録されたイベントは、標準で一覧に表示されます。表示しない場合は、sono media のアカウント画面（<https://media.sono-music.com/account/>）のイベントタブにある「関連ユーザーに登録されたイベント」で「非表示にする」ボタンを押してください。
+
+非表示にしたイベントは、同じ欄の「非表示のイベント」を開くと一覧で表示されます。「表示する」ボタンを押すと元に戻ります。
+
+アカウント画面の設定とは別に、ショートコードに `related="false"` を指定すると、その一覧では関連ユーザーに登録されたイベントをすべて表示しません。ご自身が投稿したイベントだけが表示されます。
 
 ## 表示内容
 
@@ -182,8 +193,10 @@ URL は `https://media.sono-music.com/users/○○○` の形式です。末尾�
 
 ## 開発者向け情報
 
-- API: `GET https://media.sono-music.com/wp-json/sono/v1/events/public?slug={slug}&limit={n}&page={p}&past={0|1}`
+- API: `GET https://media.sono-music.com/wp-json/sono/v1/events/public?slug={slug}&limit={n}&page={p}&past={0|1}&related={1|0}`
   - レスポンスには `total`、`totalPages`、`page` が含まれます。範囲外のページ番号を指定した場合は、最後のページが返ります。
+  - `related` に `0` を指定すると、関連ユーザーとして登録されたイベントを含めません。省略した場合と不正な値の場合は `1`（含める）として扱います。`total`、`upcomingTotal`、`pastTotal` もこの条件で数えます。
+  - レスポンスの `related` は、実際に適用された値（true / false）です。
   - `upcomingTotal` と `pastTotal` は、開催予定と終了済みそれぞれの総件数です。
   - プロフィールが存在しない場合や非公開の場合は、`{"code":"not_found"}` と HTTP 404 を返します。
   - 実装はメディアのテーマの `inc/setup-events-public-api.php` です。
@@ -206,6 +219,9 @@ URL は `https://media.sono-music.com/users/○○○` の形式です。末尾�
    2. `inc/events-plugin-update.json`（更新情報）。必ず手順4の zip のあとにアップロードしてください。先にアップロードすると、zip がない状態で更新の通知が表示されます。
    3. `inc/setup-event-approval.php` と `inc/setup-relay-removal.php`（関連ユーザーの非表示・解除依頼。この順に上げます）
    4. `functions.php`（API の読み込み）。最後にアップロードします。
+
+   手順5では、API（5-1）を更新情報（5-2）より先にアップロードしてください。古い API に 1.0.1 のプラグインが接続した場合、`related="false"` を指定した一覧でも関連ユーザーのイベントが表示されます（エラーにはなりません）。古いプラグインが新しい API に接続した場合は、従来どおり関連ユーザーのイベントを含めて表示します。
+
 6. アカウント画面の「プロフィールのURLをコピー」ボタンのファイルを、`assets/js/script.js`、`template-parts/content-page-account.php` の順番でアップロードします。逆の順番にすると、ボタンを押しても動作しない状態になります。
 7. ミラーのリポジトリで commit・push します。
 

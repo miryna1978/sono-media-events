@@ -1,0 +1,205 @@
+/*
+ * sono media イベント の見た目。
+ *
+ * ★ 人様のサイトに入るので、テーマの色や字を奪わない。既定では色を一切
+ *   指定せず（inherit / currentColor）、こちらは並べ方と余白だけを持つ。
+ *
+ * ★ 調整はすべて **CSS カスタムプロパティ**で受ける。値は使う場所で
+ *   `var(--名前, 既定値)` の形で読むだけにしてあり、**既定値を宣言するブロックは
+ *   置いていない**。置くと、テーマ側が同じ詳細度（例 .sono-events）で
+ *   上書きしようとしたとき、どちらが後に読み込まれるかで勝敗が変わってしまう。
+ *   この形なら、テーマ側はどこで宣言しても必ず勝つ。
+ *
+ *   使い方（子テーマの style.css などに）:
+ *
+ *     .sono-events {
+ *       --sono-events-gap: 32px;
+ *       --sono-events-radius: 10px;
+ *       --sono-events-title-color: #111;
+ *       --sono-events-meta-color: #777;
+ *     }
+ *
+ *   一覧ごとに変えたい場合は、その一覧を囲む要素に宣言すれば、その中だけ効く。
+ *
+ * 【一覧】名前 / 既定値 / 何に効くか
+ *   --sono-events-columns         3        列数（ショートコードの columns から渡る）
+ *   --sono-events-min             220px    1枠の最小幅。これを下回ると折り返す
+ *   --sono-events-gap             24px     イベントどうしの間隔
+ *   --sono-events-radius          4px      画像の角丸
+ *   --sono-events-ratio           4 / 5    画像の縦横比
+ *   --sono-events-link-color      inherit  リンクの文字色
+ *   --sono-events-date-color      inherit  開催日の色
+ *   --sono-events-title-color     inherit  タイトルの色
+ *   --sono-events-title-weight    bold     タイトルの太さ
+ *   --sono-events-title-size      1em      タイトルの大きさ
+ *   --sono-events-meta-color      inherit  会場の色
+ *   --sono-events-meta-opacity    0.8      会場の薄さ（色を指定するなら 1 に）
+ *   --sono-events-meta-size       0.9em    開催日と会場の大きさ
+ *   --sono-events-ticket-color    inherit  チケットのリンクの色
+ *   --sono-events-pager-color     inherit  ページ送りの文字色
+ *   --sono-events-pager-current   currentColor  現在ページの下線の色
+ */
+
+.sono-events__list {
+  display: grid;
+  /* 列数は指定値。ただし1枠が狭くなりすぎないよう、最小幅を下回ったら折り返す */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(
+      max(
+        var(--sono-events-min, 220px),
+        calc(
+          (100% - (var(--sono-events-columns, 3) - 1) * var(--sono-events-gap, 24px)) /
+            var(--sono-events-columns, 3)
+        )
+      ),
+      1fr
+    )
+  );
+  gap: var(--sono-events-gap, 24px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sono-events__item {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.sono-events__item p {
+  margin: 0;
+}
+
+.sono-events a {
+  color: var(--sono-events-link-color, inherit);
+}
+
+.sono-events__imagelink {
+  display: block;
+}
+
+.sono-events__image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--sono-events-ratio, 4 / 5);
+  object-fit: cover;
+  border-radius: var(--sono-events-radius, 4px);
+  display: block;
+}
+
+.sono-events__dates {
+  margin-top: 10px;
+}
+
+.sono-events__date,
+.sono-events__datemore,
+.sono-events__place {
+  font-size: var(--sono-events-meta-size, 0.9em);
+}
+
+.sono-events__date {
+  color: var(--sono-events-date-color, inherit);
+}
+
+.sono-events__datemore,
+.sono-events__place {
+  color: var(--sono-events-meta-color, inherit);
+  /* ★ 色を指定していない既定では、薄さで従属を表す。色を指定する場合は
+     --sono-events-meta-opacity: 1 にして、色そのもので差を付けるのがよい */
+  opacity: var(--sono-events-meta-opacity, 0.8);
+}
+
+.sono-events__title {
+  margin-top: 4px;
+  font-weight: var(--sono-events-title-weight, bold);
+  font-size: var(--sono-events-title-size, 1em);
+}
+
+.sono-events .sono-events__title a {
+  color: var(--sono-events-title-color, var(--sono-events-link-color, inherit));
+  text-decoration: none;
+}
+
+.sono-events .sono-events__title a:hover,
+.sono-events .sono-events__title a:focus-visible {
+  text-decoration: underline;
+}
+
+.sono-events__place {
+  margin-top: 2px;
+}
+
+.sono-events__links {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--sono-events-meta-size, 0.9em);
+}
+
+.sono-events .sono-events__ticket {
+  color: var(--sono-events-ticket-color, var(--sono-events-link-color, inherit));
+  font-weight: bold;
+}
+
+.sono-events__more {
+  margin-top: var(--sono-events-gap, 24px);
+}
+
+/* ページ送り。中央に並べるだけで、色はテーマに任せる */
+.sono-events__pager {
+  margin-top: 20px;
+}
+
+.sono-events__pager ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sono-events .sono-events__pager a,
+.sono-events__pagernow {
+  display: inline-block;
+  min-width: 2.4em;
+  padding: 6px 10px;
+  text-align: center;
+  text-decoration: none;
+  color: var(--sono-events-pager-color, inherit);
+}
+
+/* 現在地はリンクにしない。太字と下線で「いまここ」を示す */
+.sono-events__pagernow {
+  font-weight: bold;
+  border-bottom: 2px solid var(--sono-events-pager-current, currentColor);
+}
+
+.sono-events__pager a:hover,
+.sono-events__pager a:focus-visible {
+  text-decoration: underline;
+}
+
+.sono-events__pagergap {
+  padding: 0 2px;
+  opacity: 0.7;
+}
+
+/* 読み上げにだけ渡す文字。テーマが .screen-reader-text を持たない場合の保険
+   （WordPress の定番クラス名だが、必ずあるとは限らない） */
+.sono-events .screen-reader-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

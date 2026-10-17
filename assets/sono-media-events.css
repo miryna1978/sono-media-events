@@ -38,6 +38,9 @@
  *   --sono-events-ticket-color    inherit  チケットのリンクの色
  *   --sono-events-pager-color     inherit  ページ送りの文字色
  *   --sono-events-pager-current   currentColor  現在ページの下線の色
+ *
+ * 【クラスのみ】
+ *   .sono-events__empty           指定なし  イベントがないときの文（テーマの p に従う）
  */
 
 .sono-events__list {

@@ -3,7 +3,7 @@
  * Plugin Name: sono media イベント
  * Plugin URI:  https://media.sono-music.com/
  * Description: sono media に掲載した自分のイベントの一覧を、ショートコード [sono_events] でサイトに表示します。イベントを追加・公開・非公開にすると自動で反映されます。
- * Version:     1.0.1
+ * Version:     1.0.2
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author:      sono
@@ -50,7 +50,7 @@ if ( ! class_exists( 'Sono_Media_Events' ) ) :
 
 final class Sono_Media_Events {
 
-	const VERSION = '1.0.1';
+	const VERSION = '1.0.2';
 
 	/** 設定を1つの option にまとめる（増えたときに option が散らからないように） */
 	const OPTION = 'sono_media_events_settings';
@@ -87,6 +87,9 @@ final class Sono_Media_Events {
 	/** 既定・最大の表示件数。API側の丸めと合わせてある */
 	const DEFAULT_LIMIT = 12;
 	const MAX_LIMIT     = 24;
+
+	/** イベントが0件のときに表示する文の既定値（設定が未保存のとき） */
+	const DEFAULT_EMPTY = '現在、表示できるイベントはありません。';
 
 	/** 本番のホスト名。更新の確認で「入れてよいコードの出どころ」を決める */
 	const HOST = 'media.sono-music.com';
@@ -128,6 +131,42 @@ final class Sono_Media_Events {
 	public static function get_slug() {
 		$settings = get_option( self::OPTION, array() );
 		return ( is_array( $settings ) && isset( $settings['slug'] ) ) ? (string) $settings['slug'] : '';
+	}
+
+	/**
+	 * イベントが0件のときに表示する文。
+	 *
+	 * ★ 未設定（キーが無い）は既定値、空文字は「何も表示しない」。この2つを区別するため、
+	 *   既定値のままのときは設定に保存しない。
+	 */
+	public static function get_empty_message() {
+		$settings = get_option( self::OPTION, array() );
+		if ( is_array( $settings ) && array_key_exists( 'empty', $settings ) && is_string( $settings['empty'] ) ) {
+			return $settings['empty'];
+		}
+		return self::DEFAULT_EMPTY;
+	}
+
+	/** 設定に保存されている0件の文。未設定なら null（sanitize_settings で引き継ぐため） */
+	private static function stored_empty_message() {
+		$settings = get_option( self::OPTION, array() );
+		if ( is_array( $settings ) && array_key_exists( 'empty', $settings ) && is_string( $settings['empty'] ) ) {
+			return $settings['empty'];
+		}
+		return null;
+	}
+
+	/**
+	 * 送信された入力から、保存する0件の文を決める。null は「保存しない（既定値）」。
+	 *
+	 * ★ 送信に項目が無いときは保存済みの値を引き継ぐ。既定値と同じ文は保存しない。
+	 */
+	private static function resolve_empty_message( $input ) {
+		if ( is_array( $input ) && isset( $input['empty'] ) && is_string( $input['empty'] ) ) {
+			$empty = sanitize_text_field( $input['empty'] );
+			return self::DEFAULT_EMPTY !== $empty ? $empty : null;
+		}
+		return self::stored_empty_message();
 	}
 
 	/**
@@ -295,10 +334,16 @@ final class Sono_Media_Events {
 			// ★ 不正な入力で既存の設定を消さない（表示が突然消えるのを避ける）。
 			//   **見た目の設定も一緒に残すこと。** ID を打ち間違えただけで、
 			//   積み上げた色や余白の指定まで消えてしまうのは理不尽。
-			return array(
+			$kept = array(
 				'slug'  => self::get_slug(),
 				'style' => self::get_style(),
 			);
+			// 0件の文は slug と関係ないので、同じ送信の入力を採用する
+			$empty = self::resolve_empty_message( $input );
+			if ( null !== $empty ) {
+				$kept['empty'] = $empty;
+			}
+			return $kept;
 		}
 
 		// ★ ID を変えたら、前の ID で取った表示が残らないようキャッシュを捨てる
@@ -337,10 +382,19 @@ final class Sono_Media_Events {
 			);
 		}
 
-		return array(
+		$result = array(
 			'slug'  => $slug,
 			'style' => $style,
 		);
+
+		// 0件のときの文。既定値と同じ、または送られていないときは保存しない（＝既定値）。
+		// 空文字は「何も表示しない」として保存する。
+		$empty = self::resolve_empty_message( $input );
+		if ( null !== $empty ) {
+			$result['empty'] = $empty;
+		}
+
+		return $result;
 	}
 
 	public static function render_settings_page() {
@@ -378,6 +432,27 @@ final class Sono_Media_Events {
 								sono media にログインし、<a href="https://media.sono-music.com/account/" target="_blank" rel="noopener">アカウント画面</a>の
 								「プロフィールのURLをコピー」ボタンを押して、コピーしたURLを貼り付けてください。
 								URL は <code>https://media.sono-music.com/users/○○○</code> の形式です。末尾の <code>○○○</code> の部分だけを入力しても設定できます。
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="sono-events-empty">イベントがないときに表示する文</label>
+						</th>
+						<td>
+							<input
+								type="text"
+								id="sono-events-empty"
+								name="<?php echo esc_attr( self::OPTION ); ?>[empty]"
+								value="<?php echo esc_attr( self::get_empty_message() ); ?>"
+								class="large-text"
+								autocomplete="off"
+								aria-describedby="sono-events-empty-help"
+							/>
+							<p class="description" id="sono-events-empty-help">
+								表示するイベントがないときに、一覧の代わりに表示する文です。空欄にすると、何も表示しません。
+								sono media に接続できないときは表示されません。
+								ショートコードの <code>empty</code> 属性で、一覧ごとに変更することもできます。
 							</p>
 						</td>
 					</tr>
@@ -468,6 +543,11 @@ final class Sono_Media_Events {
 			<p><code>[sono_events related="false"]</code></p>
 			<p class="description">
 				<code>related="false"</code> を指定すると、関連ユーザーとして登録されたイベントを表示しません。
+			</p>
+			<p>イベントがないときの文を、一覧ごとに変更する場合:</p>
+			<p><code>[sono_events empty="今後のイベントは準備中です。"]</code></p>
+			<p class="description">
+				<code>empty=""</code> と指定すると、イベントがないときに何も表示しません。
 			</p>
 		</div>
 		<?php
@@ -804,10 +884,13 @@ final class Sono_Media_Events {
 	/**
 	 * ショートコード本体。
 	 *
-	 * @param array $atts slug / limit / columns / paged / past / related
+	 * @param array $atts slug / limit / columns / paged / past / related / empty
 	 * @return string HTML。出せるものが何も無ければ空文字。
 	 */
 	public static function shortcode( $atts ) {
+		// ★ empty は「属性が無い（設定画面の値）」と「空文字（何も表示しない）」を区別する
+		$has_empty = is_array( $atts ) && array_key_exists( 'empty', $atts );
+
 		$atts = shortcode_atts(
 			array(
 				'slug'    => '',
@@ -819,6 +902,8 @@ final class Sono_Media_Events {
 				'past'    => 'false',
 				// 関連ユーザーとして登録されたイベントを含めるか。既定は含める
 				'related' => 'true',
+				// イベントが0件のときの文。属性が無ければ設定画面の値
+				'empty'   => '',
 			),
 			$atts,
 			'sono_events'
@@ -847,7 +932,17 @@ final class Sono_Media_Events {
 
 		$data = self::get_data( $slug, $limit, $page, $past, $related );
 		if ( empty( $data['events'] ) ) {
-			// ★ 最後の砦。出せないならエラー文言も出さず、静かに何も出さない
+			// ★ 「0件と確かめられた」ときだけ文を出す。API が成功してプロフィールが実在し
+			//   （profileUrl あり）、イベントが空のとき。接続できず控えも無いとき、
+			//   プロフィールが見つからないとき（missing）は、「無い」と言い切れないので、
+			//   またサイトの訪問者に設定の誤りを見せないために、静かに何も出さない。
+			if ( ! empty( $data['profileUrl'] ) && empty( $data['missing'] ) ) {
+				$message = $has_empty ? trim( (string) $atts['empty'] ) : self::get_empty_message();
+				if ( '' !== $message ) {
+					wp_enqueue_style( 'sono-media-events' );
+					return '<div class="sono-events"><p class="sono-events__empty">' . esc_html( $message ) . '</p></div>';
+				}
+			}
 			return '';
 		}
 
@@ -1257,6 +1352,13 @@ final class Sono_Media_Events {
 			if ( $clean ) {
 				$events[] = $clean;
 			}
+		}
+
+		// ★ API が events を返したのに、1件も使える形でなかった（応答の形が崩れている）。
+		//   「0件」と確かめられたわけではないので、失敗として扱う（「ありません」の文を出さず、
+		//   控えも消さない）。
+		if ( $body['events'] && ! $events ) {
+			return null;
 		}
 
 		$total = ( isset( $body['total'] ) && is_numeric( $body['total'] ) ) ? max( 0, (int) $body['total'] ) : count( $events );

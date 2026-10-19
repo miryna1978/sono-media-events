@@ -1,0 +1,106 @@
+/*
+ * sono media イベントの設定画面（設定 → sono media イベント）だけの見た目。
+ *
+ * ★ 読み込むのはこの設定画面だけ（sono-media-events.php の enqueue_admin_assets）。
+ *   セレクタはすべて .sono-events-admin（画面の .wrap に付く）の中に限り、
+ *   他の管理画面や他のプラグインの画面に影響させない。
+ * ★ やることは行間と余白を広げるだけ。WordPress 標準の見た目（nav-tab・form-table・
+ *   notice・button）は変えない。!important は使わない。
+ */
+
+.sono-events-admin p,
+.sono-events-admin .description,
+.sono-events-admin li {
+  line-height: 1.7;
+}
+
+.sono-events-admin .nav-tab-wrapper {
+  margin-bottom: 1.5em;
+}
+
+.sono-events-admin p {
+  margin: 1em 0;
+}
+
+.sono-events-admin h2 {
+  margin: 2.5em 0 1em;
+}
+
+.sono-events-admin .form-table th,
+.sono-events-admin .form-table td {
+  padding-top: 1.1em;
+  padding-bottom: 1.1em;
+}
+
+.sono-events-admin .form-table td .description {
+  margin-top: 0.75em;
+}
+
+/* 状態の通知（設定の行の中・確認結果） */
+.sono-events-admin__status {
+  margin-top: 1em;
+}
+
+.sono-events-admin .notice.inline {
+  margin: 0.75em 0;
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
+}
+
+.sono-events-admin__status > p {
+  margin: 0.75em 0 0;
+}
+
+/* 入力欄とボタンを同じ行に並べ、高さを揃える */
+.sono-events-admin .form-table td .regular-text + .button {
+  margin-left: 0.5em;
+  vertical-align: middle;
+}
+
+.sono-events-admin .form-table td .regular-text {
+  vertical-align: middle;
+}
+
+
+/* 使い方の表：狭い画面では横にスクロールする */
+.sono-events-admin__table {
+  overflow-x: auto;
+}
+
+.sono-events-admin table.widefat th,
+.sono-events-admin table.widefat td {
+  padding: 0.9em 1em;
+  line-height: 1.7;
+}
+
+.sono-events-admin__code {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.sono-events-admin__code code {
+  white-space: nowrap;
+}
+
+.sono-events-admin table.widefat + .description,
+.sono-events-admin__table + .description {
+  margin-top: 1.25em;
+}
+
+/* 関連サービスのカード */
+.sono-events-admin .card.sono-events-admin__card {
+  max-width: 40em;
+  margin-top: 1.25em;
+  padding: 0.5em 1.5em 0.75em;
+}
+
+.sono-events-admin__card h2 {
+  margin: 0.75em 0 0.5em;
+}
+
+.sono-events-admin__active {
+  display: inline-block;
+  margin-right: 0.75em;
+  font-weight: 600;
+  vertical-align: middle;
+}

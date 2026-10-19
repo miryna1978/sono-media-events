@@ -3,7 +3,7 @@
  * Plugin Name: sono media イベント
  * Plugin URI:  https://media.sono-music.com/
  * Description: sono media に掲載した自分のイベントの一覧を、ショートコード [sono_events] でサイトに表示します。イベントを追加・公開・非公開にすると自動で反映されます。
- * Version:     1.0.2
+ * Version:     1.1.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author:      sono
@@ -50,7 +50,7 @@ if ( ! class_exists( 'Sono_Media_Events' ) ) :
 
 final class Sono_Media_Events {
 
-	const VERSION = '1.0.2';
+	const VERSION = '1.1.0';
 
 	/** 設定を1つの option にまとめる（増えたときに option が散らからないように） */
 	const OPTION = 'sono_media_events_settings';
@@ -104,6 +104,9 @@ final class Sono_Media_Events {
 	 */
 	const SLUG_PATTERN = '/^[a-z0-9%_.~-]{1,200}$/';
 
+	/** 設定画面のフック名（管理画面用 CSS をこの画面だけに読み込むため） */
+	private static $hook_suffix = '';
+
 	public static function init() {
 		add_shortcode( 'sono_events', array( __CLASS__, 'shortcode' ) );
 		// ★ ヘッダーの Update URI のホスト名でフィルタ名が決まる（WordPress 5.8以降）。
@@ -113,6 +116,7 @@ final class Sono_Media_Events {
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 		add_action( 'admin_post_sono_media_events_flush', array( __CLASS__, 'handle_flush' ) );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_assets' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
 		add_filter(
 			'plugin_action_links_' . plugin_basename( __FILE__ ),
 			array( __CLASS__, 'plugin_action_links' )
@@ -244,7 +248,7 @@ final class Sono_Media_Events {
 	}
 
 	public static function add_settings_page() {
-		add_options_page(
+		self::$hook_suffix = (string) add_options_page(
 			'sono media イベント',
 			'sono media イベント',
 			'manage_options',
@@ -309,14 +313,32 @@ final class Sono_Media_Events {
 
 	/**
 	 * 設定の検証。
+	 *
+	 * ★ 設定画面はタブごとにフォームが別なので、送信に含まれない項目がある
+	 *   （「見た目」タブの保存には ID と0件の文が無い。その逆も同じ）。
+	 *   含まれない項目は**保存済みの値をそのまま引き継ぐ**。引き継がないと、
+	 *   別のタブの保存で ID や見た目が消える。
 	 */
 	public static function sanitize_settings( $input ) {
+		// ★ 見た目は、送信に見た目の項目があるときだけ作り直す。無いときは保存済みを引き継ぐ。
+		$style = self::get_style();
+		if ( is_array( $input ) && isset( $input['style'] ) && is_array( $input['style'] ) ) {
+			$style = self::build_style( $input );
+		}
+
+		// 0件の文。送られていないときは保存済みの値を引き継ぐ（resolve_empty_message が行う）
+		$empty = self::resolve_empty_message( $input );
+
+		// ★ ID の項目が無い送信（「見た目」タブの保存）では、保存済みの ID を引き継ぐ。
+		//   空にして連携をやめたことにしない。
+		if ( ! is_array( $input ) || ! isset( $input['slug'] ) || ! is_string( $input['slug'] ) ) {
+			return self::build_result( self::get_slug(), $style, $empty );
+		}
+
 		// ★ 文字列であることを先に確かめる。配列を送られると (string) が
 		//   PHP の警告を出したうえで "Array" になり、小文字化した "array" が
 		//   ID の形に合ってしまう（そのまま保存される）。
-		$raw = ( is_array( $input ) && isset( $input['slug'] ) && is_string( $input['slug'] ) )
-			? trim( $input['slug'] ) : '';
-
+		$raw  = trim( $input['slug'] );
 		$slug = self::extract_slug( $raw );
 
 		if ( '' !== $raw && '' === $slug ) {
@@ -332,18 +354,8 @@ final class Sono_Media_Events {
 				);
 			}
 			// ★ 不正な入力で既存の設定を消さない（表示が突然消えるのを避ける）。
-			//   **見た目の設定も一緒に残すこと。** ID を打ち間違えただけで、
-			//   積み上げた色や余白の指定まで消えてしまうのは理不尽。
-			$kept = array(
-				'slug'  => self::get_slug(),
-				'style' => self::get_style(),
-			);
-			// 0件の文は slug と関係ないので、同じ送信の入力を採用する
-			$empty = self::resolve_empty_message( $input );
-			if ( null !== $empty ) {
-				$kept['empty'] = $empty;
-			}
-			return $kept;
+			//   ID だけ保存済みの値に戻し、見た目と0件の文は同じ送信の内容を採用する。
+			return self::build_result( self::get_slug(), $style, $empty );
 		}
 
 		// ★ ID を変えたら、前の ID で取った表示が残らないようキャッシュを捨てる
@@ -351,14 +363,32 @@ final class Sono_Media_Events {
 			self::flush_cache();
 		}
 
-		// 見た目の設定。形の合わない値は捨てて、CSS 側の既定に任せる
+		return self::build_result( $slug, $style, $empty );
+	}
+
+	/** 保存する配列を組み立てる。0件の文が null のときは保存しない（＝既定値） */
+	private static function build_result( $slug, $style, $empty ) {
+		$result = array(
+			'slug'  => $slug,
+			'style' => $style,
+		);
+		if ( null !== $empty ) {
+			$result['empty'] = $empty;
+		}
+		return $result;
+	}
+
+	/**
+	 * 送信された見た目の入力を検証して、保存する形にする。
+	 * 通らなかった項目は警告で知らせる（黙って捨てない）。
+	 */
+	private static function build_style( $input ) {
 		$style     = array();
-		$raw_style = ( is_array( $input ) && isset( $input['style'] ) && is_array( $input['style'] ) )
-			? $input['style'] : array();
+		$raw_style = $input['style'];
 		$dropped   = array();
 		// 色は「指定する」に印を付けたものだけを使う。色の入力欄は空にできないため
 		// （空欄＝テーマに任せる、を別の印で表す）
-		$use = ( is_array( $input ) && isset( $input['style_use'] ) && is_array( $input['style_use'] ) )
+		$use = ( isset( $input['style_use'] ) && is_array( $input['style_use'] ) )
 			? $input['style_use'] : array();
 		foreach ( self::style_fields() as $key => $field ) {
 			if ( 'color' === $field['type'] && ! isset( $use[ $key ] ) ) {
@@ -381,175 +411,332 @@ final class Sono_Media_Events {
 				'warning'
 			);
 		}
+		return $style;
+	}
 
-		$result = array(
-			'slug'  => $slug,
-			'style' => $style,
+	/** 設定画面のタブ。値はこの一覧に無いものを受け付けない（既定は先頭） */
+	private static function tabs() {
+		return array(
+			'settings' => '設定',
+			'style'    => '見た目',
+			'usage'    => '使い方',
+			'related'  => '関連サービス',
 		);
+	}
 
-		// 0件のときの文。既定値と同じ、または送られていないときは保存しない（＝既定値）。
-		// 空文字は「何も表示しない」として保存する。
-		$empty = self::resolve_empty_message( $input );
-		if ( null !== $empty ) {
-			$result['empty'] = $empty;
+	/** 表示するタブ。クエリの値はホワイトリストで検証し、外れたら既定のタブに倒す */
+	private static function current_tab() {
+		$tab = ( isset( $_GET['tab'] ) && is_string( $_GET['tab'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+		return array_key_exists( $tab, self::tabs() ) ? $tab : 'settings';
+	}
+
+	/** 設定画面の URL（タブ指定つき） */
+	private static function settings_url( $tab = 'settings' ) {
+		return admin_url( 'options-general.php?page=sono-media-events&tab=' . rawurlencode( $tab ) );
+	}
+
+	/** この設定画面を開いたときだけ、管理画面用の CSS を読み込む */
+	public static function enqueue_admin_assets( $hook ) {
+		if ( '' === self::$hook_suffix || $hook !== self::$hook_suffix ) {
+			return;
 		}
-
-		return $result;
+		wp_enqueue_style(
+			'sono-media-events-admin',
+			plugins_url( 'assets/sono-media-events-admin.css', __FILE__ ),
+			array(),
+			self::VERSION
+		);
+		// 色を選んだら「この色を指定する」にチェックを入れる（チェックし忘れて、選んだ色が
+		// 保存されないのを防ぐ）。JavaScript が動かない環境では、従来どおり手でチェックする。
+		wp_add_inline_script(
+			'common',
+			"document.addEventListener('input',function(e){var t=e.target;if(!t||t.type!=='color'||!t.closest('.sono-events-admin'))return;var c=t.parentNode.querySelector('input[type=checkbox]');if(c){c.checked=true;}});"
+		);
 	}
 
 	public static function render_settings_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		$slug  = self::get_slug();
+		$current = self::current_tab();
+		?>
+		<div class="wrap sono-events-admin">
+			<h1>sono media イベント</h1>
+
+			<nav class="nav-tab-wrapper wp-clearfix" aria-label="設定画面のタブ">
+				<?php foreach ( self::tabs() as $key => $label ) : ?>
+					<a href="<?php echo esc_url( self::settings_url( $key ) ); ?>"
+						class="nav-tab<?php echo $key === $current ? ' nav-tab-active' : ''; ?>"
+						<?php echo $key === $current ? 'aria-current="page"' : ''; ?>><?php echo esc_html( $label ); ?></a>
+				<?php endforeach; ?>
+			</nav>
+
+			<?php
+			if ( 'style' === $current ) {
+				self::render_tab_style();
+			} elseif ( 'usage' === $current ) {
+				self::render_tab_usage();
+			} elseif ( 'related' === $current ) {
+				self::render_tab_related();
+			} else {
+				self::render_tab_settings();
+			}
+			?>
+		</div>
+		<?php
+	}
+
+	/** 「設定」タブ */
+	private static function render_tab_settings() {
+		$slug = self::get_slug();
+		?>
+		<p>
+			sono media に掲載されたイベントの一覧を、このサイトに表示します。
+			sono media でイベントを追加したり、公開・非公開を切り替えたりすると、<?php echo esc_html( (string) self::CACHE_MINUTES ); ?>分以内にこのサイトの表示にも反映されます。
+		</p>
+
+		<form method="post" action="options.php">
+			<?php settings_fields( 'sono_media_events' ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row">
+						<label for="sono-events-slug">sono media のプロフィール</label>
+					</th>
+					<td>
+						<input
+							type="text"
+							id="sono-events-slug"
+							name="<?php echo esc_attr( self::OPTION ); ?>[slug]"
+							value="<?php echo esc_attr( rawurldecode( $slug ) ); ?>"
+							class="regular-text"
+							autocomplete="off"
+							aria-describedby="sono-events-slug-help"
+						/>
+						<p class="description" id="sono-events-slug-help">
+							sono media にログインし、<a href="https://media.sono-music.com/account/" target="_blank" rel="noopener">アカウント画面</a>の
+							「プロフィールのURLをコピー」ボタンを押して、コピーしたURLを貼り付けてください。
+							URL は <code>https://media.sono-music.com/users/○○○</code> の形式です。末尾の <code>○○○</code> の部分だけを入力しても設定できます。
+						</p>
+						<div class="sono-events-admin__status">
+							<?php self::render_status( $slug ); ?>
+						</div>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<label for="sono-events-empty">イベントがないときに表示する文</label>
+					</th>
+					<td>
+						<input
+							type="text"
+							id="sono-events-empty"
+							name="<?php echo esc_attr( self::OPTION ); ?>[empty]"
+							value="<?php echo esc_attr( self::get_empty_message() ); ?>"
+							class="large-text"
+							autocomplete="off"
+							aria-describedby="sono-events-empty-help"
+						/>
+						<p class="description" id="sono-events-empty-help">
+							表示するイベントがないときに、一覧の代わりに表示する文です。空欄にすると、何も表示しません。
+							sono media に接続できないときは表示されません。
+							ショートコードの <code>empty</code> 属性で、一覧ごとに変更することもできます。
+						</p>
+					</td>
+				</tr>
+			</table>
+			<?php submit_button(); ?>
+		</form>
+		<?php self::render_flush_form(); ?>
+		<?php
+	}
+
+	/** 「見た目」タブ */
+	private static function render_tab_style() {
 		$style = self::get_style();
 		?>
-		<div class="wrap">
-			<h1>sono media イベント</h1>
-			<p>
-				sono media に掲載されたイベントの一覧を、このサイトに表示します。
-				sono media でイベントを追加したり、公開・非公開を切り替えたりすると、<?php echo esc_html( (string) self::CACHE_MINUTES ); ?>分以内にこのサイトの表示にも反映されます。
-			</p>
-
-			<form method="post" action="options.php">
-				<?php settings_fields( 'sono_media_events' ); ?>
-				<table class="form-table" role="presentation">
+		<p>
+			変更したい項目だけを入力してください。空欄の項目には、お使いのテーマのデザインが適用されます。
+			色は「この色を指定する」にチェックを入れた項目だけが適用されます。
+		</p>
+		<form method="post" action="options.php">
+			<?php settings_fields( 'sono_media_events' ); ?>
+			<table class="form-table" role="presentation">
+				<?php foreach ( self::style_fields() as $key => $field ) : ?>
+					<?php
+					$id    = 'sono-events-style-' . str_replace( '_', '-', $key );
+					$value = isset( $style[ $key ] ) ? $style[ $key ] : '';
+					$name  = self::OPTION . '[style][' . $key . ']';
+					?>
 					<tr>
-						<th scope="row">
-							<label for="sono-events-slug">sono media のプロフィール</label>
-						</th>
+						<th scope="row"><label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label></th>
 						<td>
-							<input
-								type="text"
-								id="sono-events-slug"
-								name="<?php echo esc_attr( self::OPTION ); ?>[slug]"
-								value="<?php echo esc_attr( rawurldecode( $slug ) ); ?>"
-								class="regular-text"
-								autocomplete="off"
-								aria-describedby="sono-events-slug-help"
-							/>
-							<p class="description" id="sono-events-slug-help">
-								sono media にログインし、<a href="https://media.sono-music.com/account/" target="_blank" rel="noopener">アカウント画面</a>の
-								「プロフィールのURLをコピー」ボタンを押して、コピーしたURLを貼り付けてください。
-								URL は <code>https://media.sono-music.com/users/○○○</code> の形式です。末尾の <code>○○○</code> の部分だけを入力しても設定できます。
-							</p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">
-							<label for="sono-events-empty">イベントがないときに表示する文</label>
-						</th>
-						<td>
-							<input
-								type="text"
-								id="sono-events-empty"
-								name="<?php echo esc_attr( self::OPTION ); ?>[empty]"
-								value="<?php echo esc_attr( self::get_empty_message() ); ?>"
-								class="large-text"
-								autocomplete="off"
-								aria-describedby="sono-events-empty-help"
-							/>
-							<p class="description" id="sono-events-empty-help">
-								表示するイベントがないときに、一覧の代わりに表示する文です。空欄にすると、何も表示しません。
-								sono media に接続できないときは表示されません。
-								ショートコードの <code>empty</code> 属性で、一覧ごとに変更することもできます。
-							</p>
-						</td>
-					</tr>
-				</table>
-
-				<h2>見た目</h2>
-				<p>
-					変更したい項目だけを入力してください。空欄の項目には、お使いのテーマのデザインが適用されます。
-					色は「この色を指定する」にチェックを入れた項目だけが適用されます。
-				</p>
-				<table class="form-table" role="presentation">
-					<?php foreach ( self::style_fields() as $key => $field ) : ?>
-						<?php
-						$id    = 'sono-events-style-' . str_replace( '_', '-', $key );
-						$value = isset( $style[ $key ] ) ? $style[ $key ] : '';
-						$name  = self::OPTION . '[style][' . $key . ']';
-						?>
-						<tr>
-							<th scope="row"><label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label></th>
-							<td>
-								<?php if ( 'color' === $field['type'] ) : ?>
+							<?php if ( 'color' === $field['type'] ) : ?>
+								<?php
+								// ★ 色は自由入力にせず選ばせる（書き方の間違いが起こらない）。
+								//   使うかどうかは別の印で表す——色の入力欄は「空」にできないため。
+								// ★ **入力欄を disabled にしない。** disabled の欄は送信されず、
+								//   JavaScript が動かない環境で印を付けても何も起きない。
+								//   使うかどうかはサーバー側が印で判断しているので、常に送ってよい。
+								// ★ 印を先に置く。操作できるものより先に、操作の意味を読ませる。
+								// ★ 未指定のときの色の見本は、WordPress 管理画面の文字色にする。
+								//   実際の既定はテーマの色（inherit）で、ここからは分からないため。
+								?>
+								<label>
+									<input type="checkbox" name="<?php echo esc_attr( self::OPTION . '[style_use][' . $key . ']' ); ?>"
+										value="1" <?php checked( '' !== $value ); ?> />
+									この色を指定する
+									<?php // 同じ文言の印が並ぶので、読み上げには項目名を添える ?>
+									<span class="screen-reader-text">（<?php echo esc_html( $field['label'] ); ?>）</span>
+								</label>
+								<input type="color" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $name ); ?>"
+									value="<?php echo esc_attr( '' !== $value ? $value : ( isset( $field['swatch'] ) ? $field['swatch'] : '#1d2327' ) ); ?>" />
+							<?php elseif ( 'weight' === $field['type'] ) : ?>
+								<select id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $name ); ?>">
+									<option value="">テーマの設定に従う</option>
+									<?php foreach ( array( 'normal' => '標準', 'bold' => '太字', '600' => 'やや太字（600）' ) as $v => $l ) : ?>
+										<option value="<?php echo esc_attr( $v ); ?>" <?php selected( $value, $v ); ?>><?php echo esc_html( $l ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							<?php else : ?>
+								<input type="text" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $name ); ?>"
+									value="<?php echo esc_attr( $value ); ?>" class="small-text"
+									placeholder="<?php echo esc_attr( isset( $field['placeholder'] ) ? $field['placeholder'] : '' ); ?>"
+									aria-describedby="<?php echo esc_attr( $id . '-help' ); ?>" />
+								<span class="description" id="<?php echo esc_attr( $id . '-help' ); ?>">
 									<?php
-									// ★ 色は自由入力にせず選ばせる（書き方の間違いが起こらない）。
-									//   使うかどうかは別の印で表す——色の入力欄は「空」にできないため。
-									// ★ **入力欄を disabled にしない。** disabled の欄は送信されず、
-									//   JavaScript が動かない環境で印を付けても何も起きない。
-									//   使うかどうかはサーバー側が印で判断しているので、常に送ってよい。
-									// ★ 印を先に置く。操作できるものより先に、操作の意味を読ませる。
+									echo esc_html(
+										'ratio' === $field['type'] ? '例: 4 / 5、1 / 1、16 / 9'
+											: ( 'opacity' === $field['type'] ? '0〜1（例: 0.8）'
+												: '単位付きの数値（例: ' . ( isset( $field['placeholder'] ) ? $field['placeholder'] : '16px' ) . '）' )
+									);
 									?>
-									<label>
-										<input type="checkbox" name="<?php echo esc_attr( self::OPTION . '[style_use][' . $key . ']' ); ?>"
-											value="1" <?php checked( '' !== $value ); ?> />
-										この色を指定する
-										<?php // 同じ文言の印が並ぶので、読み上げには項目名を添える ?>
-										<span class="screen-reader-text">（<?php echo esc_html( $field['label'] ); ?>）</span>
-									</label>
-									<input type="color" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $name ); ?>"
-										value="<?php echo esc_attr( '' !== $value ? $value : '#000000' ); ?>" />
-								<?php elseif ( 'weight' === $field['type'] ) : ?>
-									<select id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $name ); ?>">
-										<option value="">テーマの設定に従う</option>
-										<?php foreach ( array( 'normal' => '標準', 'bold' => '太字', '600' => 'やや太字（600）' ) as $v => $l ) : ?>
-											<option value="<?php echo esc_attr( $v ); ?>" <?php selected( $value, $v ); ?>><?php echo esc_html( $l ); ?></option>
-										<?php endforeach; ?>
-									</select>
-								<?php else : ?>
-									<input type="text" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $name ); ?>"
-										value="<?php echo esc_attr( $value ); ?>" class="small-text"
-										placeholder="<?php echo esc_attr( isset( $field['placeholder'] ) ? $field['placeholder'] : '' ); ?>"
-										aria-describedby="<?php echo esc_attr( $id . '-help' ); ?>" />
-									<span class="description" id="<?php echo esc_attr( $id . '-help' ); ?>">
-										<?php
-										echo esc_html(
-											'ratio' === $field['type'] ? '例: 4 / 5、1 / 1、16 / 9'
-												: ( 'opacity' === $field['type'] ? '0〜1（例: 0.8）'
-													: '単位付きの数値（例: ' . ( isset( $field['placeholder'] ) ? $field['placeholder'] : '16px' ) . '）' )
-										);
-										?>
-									</span>
-								<?php endif; ?>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</table>
-				<?php submit_button(); ?>
-			</form>
+								</span>
+							<?php endif; ?>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</table>
+			<?php submit_button(); ?>
+		</form>
+		<?php
+	}
 
-			<?php self::render_status( $slug ); ?>
-
-			<h2>使い方</h2>
-			<p>投稿または固定ページに、次のショートコードを入力してください。開催予定のイベントが、開催日の近い順に表示されます。</p>
-			<p><code>[sono_events]</code></p>
-			<p>表示件数と列数を指定する場合（表示件数は最大 <?php echo esc_html( (string) self::MAX_LIMIT ); ?>件）:</p>
-			<p><code>[sono_events limit="8" columns="3"]</code></p>
-			<p>すべてのイベントをページ送りで表示する場合:</p>
-			<p><code>[sono_events paged="true"]</code></p>
-			<p class="description">
-				ページ送りを使う一覧は、1つのページに1つだけ配置してください。同じページに2つ配置すると、
-				片方のページ送りを操作したときに両方の一覧が切り替わります。
-			</p>
-			<p>終了したイベントを新しい順に表示する場合:</p>
-			<p><code>[sono_events past="true" paged="true"]</code></p>
-			<p>
-				別のプロフィールのイベントを表示する場合（レーベルのサイトなど）は、そのプロフィールのURLの末尾（<code>/users/</code> 以降の部分）を <code>slug</code> に指定します。
-			</p>
-			<p><code>[sono_events slug="○○○"]</code></p>
-			<p>ご自身が投稿したイベントだけを表示する場合:</p>
-			<p><code>[sono_events related="false"]</code></p>
-			<p class="description">
-				<code>related="false"</code> を指定すると、関連ユーザーとして登録されたイベントを表示しません。
-			</p>
-			<p>イベントがないときの文を、一覧ごとに変更する場合:</p>
-			<p><code>[sono_events empty="今後のイベントは準備中です。"]</code></p>
-			<p class="description">
-				<code>empty=""</code> と指定すると、イベントがないときに何も表示しません。
-			</p>
+	/** 「使い方」タブ */
+	private static function render_tab_usage() {
+		$rows = array(
+			array(
+				'開催予定のイベントを、開催日の近い順に表示する',
+				'[sono_events]',
+				'',
+			),
+			array(
+				'表示件数と列数を指定する',
+				'[sono_events limit="8" columns="3"]',
+				'表示件数は最大 ' . self::MAX_LIMIT . '件です。',
+			),
+			array(
+				'すべてのイベントをページ送りで表示する',
+				'[sono_events paged="true"]',
+				'ページ送りを使う一覧は、1つのページに1つだけ配置してください。同じページに2つ配置すると、片方のページ送りを操作したときに両方の一覧が切り替わります。',
+			),
+			array(
+				'終了したイベントを新しい順に表示する',
+				'[sono_events past="true" paged="true"]',
+				'',
+			),
+			array(
+				'別のプロフィールのイベントを表示する（レーベルのサイトなど）',
+				'[sono_events slug="○○○"]',
+				'そのプロフィールのURLの末尾（/users/ 以降の部分）を slug に指定します。',
+			),
+			array(
+				'ご自身が投稿したイベントだけを表示する',
+				'[sono_events related="false"]',
+				'related="false" を指定すると、関連ユーザーとして登録されたイベントを表示しません。',
+			),
+			array(
+				'イベントがないときの文を、一覧ごとに変更する',
+				'[sono_events empty="今後のイベントは準備中です。"]',
+				'empty="" と指定すると、イベントがないときに何も表示しません。',
+			),
+		);
+		?>
+		<p>投稿または固定ページに、次の表のショートコードを入力してください。</p>
+		<div class="sono-events-admin__table">
+		<table class="widefat striped">
+			<thead>
+				<tr>
+					<th scope="col">用途</th>
+					<th scope="col">ショートコード</th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $rows as $row ) : ?>
+					<tr>
+						<td>
+							<?php echo esc_html( $row[0] ); ?>
+							<?php if ( '' !== $row[2] ) : ?>
+								<br /><span class="description"><?php echo esc_html( $row[2] ); ?></span>
+							<?php endif; ?>
+						</td>
+						<td class="sono-events-admin__code"><code><?php echo esc_html( $row[1] ); ?></code></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 		</div>
+		<p class="description">
+			すべてのオプションと表示内容の詳細は、<a href="https://github.com/miryna1978/sono-media-events#readme" target="_blank" rel="noopener">README（GitHub）</a>を参照してください。
+		</p>
+		<?php
+	}
+
+	/**
+	 * 「関連サービス」タブ。同じ運営の配布プラグインの紹介。
+	 *
+	 * ★ 外部への通信・計測・画像は使わない。固定の文とリンクだけを出す。
+	 * ★ そのプラグインがこのサイトで有効なら、紹介ページではなく設定画面へ案内する。
+	 */
+	private static function render_tab_related() {
+		if ( ! function_exists( 'is_plugin_active' ) && defined( 'ABSPATH' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$services = array(
+			array(
+				'name'    => 'sonoTracks Discography',
+				'desc'    => 'sonoTracks（音源の直販サービス）で販売している作品の一覧を、このサイトに表示するプラグインです。楽曲を制作して販売している DJ やレーベルのサイトで使えます。',
+				'file'    => 'sonotracks-discography/sonotracks-discography.php',
+				'page'    => 'sonotracks-discography',
+				'url'     => 'https://sono-tracks.com/wordpress',
+				'label'   => '配布ページを開く',
+			),
+			array(
+				'name'    => 'sonoLoop 応援ボタン',
+				'desc'    => 'sonoLoop（ファンがアーティストに応援のチップを贈れるサービス）の応援ページへの導線を表示するプラグインです。サイトに来たファンが、その場で応援ページを開けます。パソコンでは QR コード、スマートフォンではボタンで表示されます。',
+				'file'    => 'sonoloop-support/sonoloop-support.php',
+				'page'    => 'sonoloop-support',
+				'url'     => 'https://sono-loop.com/wordpress',
+				'label'   => '配布ページを開く',
+			),
+		);
+		?>
+		<p>sono が配布しているプラグインです。このサイトで併用できます。</p>
+		<?php foreach ( $services as $service ) : ?>
+			<?php $active = function_exists( 'is_plugin_active' ) && is_plugin_active( $service['file'] ); ?>
+			<div class="card sono-events-admin__card">
+				<h2><?php echo esc_html( $service['name'] ); ?></h2>
+				<p><?php echo esc_html( $service['desc'] ); ?></p>
+				<p>
+					<?php if ( $active ) : ?>
+						<span class="sono-events-admin__active">有効化済み</span>
+						<a class="button button-secondary" href="<?php echo esc_url( admin_url( 'options-general.php?page=' . $service['page'] ) ); ?>">設定画面を開く</a>
+					<?php else : ?>
+						<a class="button button-secondary" href="<?php echo esc_url( $service['url'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $service['label'] ); ?></a>
+					<?php endif; ?>
+				</p>
+			</div>
+		<?php endforeach; ?>
 		<?php
 	}
 
@@ -626,18 +813,27 @@ final class Sono_Media_Events {
 	 *   リンクにすると、先読みや履歴の戻りで意図せず走りうる。
 	 */
 	private static function render_flush_button() {
+		// フォームの外にある render_flush_form の form を、form 属性で参照する
+		echo '<p><button type="submit" form="sono-events-flush-form" class="button button-secondary">表示を今すぐ更新する</button></p>';
+	}
+
+	/**
+	 * 「表示を今すぐ更新する」の送信先のフォーム（見える部品は無い）。
+	 * ★ 設定の form の外に置く（form は入れ子にできない）。押すボタンは設定の中にあり、
+	 *   button の form 属性でこの form を指す。
+	 */
+	private static function render_flush_form() {
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<form id="sono-events-flush-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="sono_media_events_flush" />
 			<?php wp_nonce_field( 'sono_media_events_flush' ); ?>
-			<?php submit_button( '表示を今すぐ更新する', 'secondary', 'submit', true ); ?>
 		</form>
 		<?php
 	}
 
 	/** プラグイン一覧から設定画面へ */
 	public static function plugin_action_links( $links ) {
-		$url = admin_url( 'options-general.php?page=sono-media-events' );
+		$url = self::settings_url( 'settings' );
 		array_unshift( $links, sprintf( '<a href="%s">設定</a>', esc_url( $url ) ) );
 		return $links;
 	}
@@ -649,7 +845,7 @@ final class Sono_Media_Events {
 		}
 		check_admin_referer( 'sono_media_events_flush' );
 		self::flush_cache();
-		wp_safe_redirect( admin_url( 'options-general.php?page=sono-media-events' ) );
+		wp_safe_redirect( self::settings_url( 'settings' ) );
 		exit;
 	}
 

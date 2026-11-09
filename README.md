@@ -224,6 +224,12 @@ URL は `https://media.sono-music.com/users/○○○` の形式です。末尾�
 | `.sono-events__pager` | ページ送り |
 | `.sono-events__empty` | イベントがないときの文 |
 | `.sono-events__more` | 「sono media ですべて見る」 |
+| `.sono-events__link` | 画像・「詳細を見る」・「sono media ですべて見る」のリンク（`--sono-events-link-color` が効く） |
+| `.sono-events__titleLink` | イベント名のリンク |
+| `.sono-events__pagerList` | ページ送りの一覧（`ul`） |
+| `.sono-events__pagerLink` | ページ送りのリンク（前へ・次へ・各ページ） |
+
+クラス1つで指定して効かないときは、プラグインの CSS のほうが強い指定になっています（イベント名のリンク、ページ送りのリンク、チケットのリンクなど）。`.sono-events .sono-events__item a.sono-events__titleLink`（ページ送りのリンクなら `.sono-events .sono-events__pager a.sono-events__pagerLink`）のようにクラスを重ねて書くか、上の CSS 変数を使ってください。
 
 ## 開発者向け情報
 

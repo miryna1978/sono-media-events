@@ -5,10 +5,21 @@
  *   指定せず（inherit / currentColor）、こちらは並べ方と余白だけを持つ。
  *
  * ★ 調整はすべて **CSS カスタムプロパティ**で受ける。値は使う場所で
- *   `var(--名前, 既定値)` の形で読むだけにしてあり、**既定値を宣言するブロックは
- *   置いていない**。置くと、テーマ側が同じ詳細度（例 .sono-events）で
- *   上書きしようとしたとき、どちらが後に読み込まれるかで勝敗が変わってしまう。
- *   この形なら、テーマ側はどこで宣言しても必ず勝つ。
+ *   `var(--名前, 既定値)` の形で読むだけにしてあり、**公開している名前
+ *   （--sono-events-gap など）を宣言するブロックは置いていない**。置くと、
+ *   テーマ側が同じ詳細度（例 .sono-events）で上書きしようとしたとき、
+ *   どちらが後に読み込まれるかで勝敗が変わってしまう。この形なら、
+ *   テーマ側はどこで宣言しても必ず勝つ。
+ *
+ * ★ 既定値の数値（px）は、下の :root にまとめた **別の名前** に置き、宣言では var() で読む。
+ *   --sono-events-default-*（一覧の既定値）、--sono-events-space-*（余白。大きさの順に
+ *   xxs 2・xs 4・s 6・m 8・l 10・xl 16・xxl 20）、--sono-events-line（強調の線の太さ）、
+ *   --sono-events-hairline（1px。読み上げ専用の文字の大きさ）。値ではなく役割で名付けてある。
+ *   公開している名前とは別なので、テーマ側の上書きとは競合しない。
+ *
+ * ★ 要素（p・a・ul）の規則は、PHP 側で振ったクラスと組み合わせて書いてある
+ *   （p.sono-events__date など）。#449 より前に配布した 1.1.0 と詳細度を揃え、
+ *   利用者のテーマとの勝敗が読み込み順によらず変わらないようにするため。
  *
  *   使い方（子テーマの style.css などに）:
  *
@@ -43,6 +54,21 @@
  *   .sono-events__empty           指定なし  イベントがないときの文（テーマの p に従う）
  */
 
+:root {
+  --sono-events-default-min: 220px;
+  --sono-events-default-gap: 24px;
+  --sono-events-default-radius: 4px;
+  --sono-events-hairline: 1px;
+  --sono-events-line: 2px;
+  --sono-events-space-xxs: 2px;
+  --sono-events-space-xs: 4px;
+  --sono-events-space-s: 6px;
+  --sono-events-space-m: 8px;
+  --sono-events-space-l: 10px;
+  --sono-events-space-xl: 16px;
+  --sono-events-space-xxl: 20px;
+}
+
 .sono-events__list {
   display: grid;
   /* 列数は指定値。ただし1枠が狭くなりすぎないよう、最小幅を下回ったら折り返す */
@@ -50,16 +76,16 @@
     auto-fill,
     minmax(
       max(
-        var(--sono-events-min, 220px),
+        var(--sono-events-min, var(--sono-events-default-min)),
         calc(
-          (100% - (var(--sono-events-columns, 3) - 1) * var(--sono-events-gap, 24px)) /
+          (100% - (var(--sono-events-columns, 3) - 1) * var(--sono-events-gap, var(--sono-events-default-gap))) /
             var(--sono-events-columns, 3)
         )
       ),
       1fr
     )
   );
-  gap: var(--sono-events-gap, 24px);
+  gap: var(--sono-events-gap, var(--sono-events-default-gap));
   list-style: none;
   margin: 0;
   padding: 0;
@@ -71,13 +97,23 @@
   min-width: 0;
 }
 
-.sono-events__item p {
+/* 理由：配布済みの 1.1.0 と詳細度を揃え、利用者のテーマとの勝敗を変えないため */
+/* stylelint-disable selector-max-type */
+p.sono-events__date,
+p.sono-events__datemore,
+p.sono-events__title,
+p.sono-events__place,
+p.sono-events__links {
   margin: 0;
 }
+/* stylelint-enable selector-max-type */
 
-.sono-events a {
+/* 理由：配布済みの 1.1.0 と詳細度を揃え、利用者のテーマとの勝敗を変えないため */
+/* stylelint-disable selector-max-type */
+a.sono-events__link {
   color: var(--sono-events-link-color, inherit);
 }
+/* stylelint-enable selector-max-type */
 
 .sono-events__imagelink {
   display: block;
@@ -88,12 +124,12 @@
   height: auto;
   aspect-ratio: var(--sono-events-ratio, 4 / 5);
   object-fit: cover;
-  border-radius: var(--sono-events-radius, 4px);
+  border-radius: var(--sono-events-radius, var(--sono-events-default-radius));
   display: block;
 }
 
 .sono-events__dates {
-  margin-top: 10px;
+  margin-top: var(--sono-events-space-l);
 }
 
 .sono-events__date,
@@ -115,30 +151,33 @@
 }
 
 .sono-events__title {
-  margin-top: 4px;
+  margin-top: var(--sono-events-space-xs);
   font-weight: var(--sono-events-title-weight, bold);
   font-size: var(--sono-events-title-size, 1em);
 }
 
-.sono-events .sono-events__title a {
+/* 理由：配布済みの 1.1.0 と詳細度を揃え、利用者のテーマとの勝敗を変えないため */
+/* stylelint-disable selector-max-type */
+.sono-events a.sono-events__titleLink {
   color: var(--sono-events-title-color, var(--sono-events-link-color, inherit));
   text-decoration: none;
 }
 
-.sono-events .sono-events__title a:hover,
-.sono-events .sono-events__title a:focus-visible {
+.sono-events a.sono-events__titleLink:hover,
+.sono-events a.sono-events__titleLink:focus-visible {
   text-decoration: underline;
 }
+/* stylelint-enable selector-max-type */
 
 .sono-events__place {
-  margin-top: 2px;
+  margin-top: var(--sono-events-space-xxs);
 }
 
 .sono-events__links {
-  margin-top: 8px;
+  margin-top: var(--sono-events-space-m);
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--sono-events-space-xs) var(--sono-events-space-xl);
   font-size: var(--sono-events-meta-size, 0.9em);
 }
 
@@ -148,48 +187,57 @@
 }
 
 .sono-events__more {
-  margin-top: var(--sono-events-gap, 24px);
+  margin-top: var(--sono-events-gap, var(--sono-events-default-gap));
 }
 
 /* ページ送り。中央に並べるだけで、色はテーマに任せる */
 .sono-events__pager {
-  margin-top: 20px;
+  margin-top: var(--sono-events-space-xxl);
 }
 
-.sono-events__pager ul {
+/* 理由：配布済みの 1.1.0 と詳細度を揃え、利用者のテーマとの勝敗を変えないため */
+/* stylelint-disable selector-max-type */
+ul.sono-events__pagerList {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--sono-events-space-xs);
   list-style: none;
   margin: 0;
   padding: 0;
 }
+/* stylelint-enable selector-max-type */
 
-.sono-events .sono-events__pager a,
+/* 理由：配布済みの 1.1.0 と詳細度を揃え、利用者のテーマとの勝敗を変えないため */
+/* stylelint-disable selector-max-type */
+.sono-events a.sono-events__pagerLink,
 .sono-events__pagernow {
   display: inline-block;
   min-width: 2.4em;
-  padding: 6px 10px;
+  padding: var(--sono-events-space-s) var(--sono-events-space-l);
   text-align: center;
   text-decoration: none;
   color: var(--sono-events-pager-color, inherit);
 }
+/* stylelint-enable selector-max-type */
 
 /* 現在地はリンクにしない。太字と下線で「いまここ」を示す */
 .sono-events__pagernow {
   font-weight: bold;
-  border-bottom: 2px solid var(--sono-events-pager-current, currentColor);
+  border-bottom: var(--sono-events-line) solid var(--sono-events-pager-current, currentColor);
 }
 
-.sono-events__pager a:hover,
-.sono-events__pager a:focus-visible {
+/* 理由：配布済みの 1.1.0 と詳細度を揃え、利用者のテーマとの勝敗を変えないため */
+/* stylelint-disable selector-max-type */
+a.sono-events__pagerLink:hover,
+a.sono-events__pagerLink:focus-visible {
   text-decoration: underline;
 }
+/* stylelint-enable selector-max-type */
 
 .sono-events__pagergap {
-  padding: 0 2px;
+  padding: 0 var(--sono-events-space-xxs);
   opacity: 0.7;
 }
 
@@ -197,9 +245,9 @@
    （WordPress の定番クラス名だが、必ずあるとは限らない） */
 .sono-events .screen-reader-text {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
+  width: var(--sono-events-hairline);
+  height: var(--sono-events-hairline);
+  margin: calc(var(--sono-events-hairline) * -1);
   padding: 0;
   overflow: hidden;
   clip-path: inset(50%);

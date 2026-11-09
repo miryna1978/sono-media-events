@@ -3,7 +3,7 @@
  * Plugin Name: sono media イベント
  * Plugin URI:  https://media.sono-music.com/
  * Description: sono media に掲載した自分のイベントの一覧を、ショートコード [sono_events] でサイトに表示します。イベントを追加・公開・非公開にすると自動で反映されます。
- * Version:     1.1.0
+ * Version:     1.1.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author:      sono
@@ -50,7 +50,7 @@ if ( ! class_exists( 'Sono_Media_Events' ) ) :
 
 final class Sono_Media_Events {
 
-	const VERSION = '1.1.0';
+	const VERSION = '1.1.1';
 
 	/** 設定を1つの option にまとめる（増えたときに option が散らからないように） */
 	const OPTION = 'sono_media_events_settings';
@@ -491,7 +491,7 @@ final class Sono_Media_Events {
 	private static function render_tab_settings() {
 		$slug = self::get_slug();
 		?>
-		<p>
+		<p class="sono-events-admin__text">
 			sono media に掲載されたイベントの一覧を、このサイトに表示します。
 			sono media でイベントを追加したり、公開・非公開を切り替えたりすると、<?php echo esc_html( (string) self::CACHE_MINUTES ); ?>分以内にこのサイトの表示にも反映されます。
 		</p>
@@ -500,10 +500,10 @@ final class Sono_Media_Events {
 			<?php settings_fields( 'sono_media_events' ); ?>
 			<table class="form-table" role="presentation">
 				<tr>
-					<th scope="row">
+					<th scope="row" class="sono-events-admin__cell">
 						<label for="sono-events-slug">sono media のプロフィール</label>
 					</th>
-					<td>
+					<td class="sono-events-admin__cell">
 						<input
 							type="text"
 							id="sono-events-slug"
@@ -513,7 +513,7 @@ final class Sono_Media_Events {
 							autocomplete="off"
 							aria-describedby="sono-events-slug-help"
 						/>
-						<p class="description" id="sono-events-slug-help">
+						<p class="description sono-events-admin__text --help" id="sono-events-slug-help">
 							sono media にログインし、<a href="https://media.sono-music.com/account/" target="_blank" rel="noopener">アカウント画面</a>の
 							「プロフィールのURLをコピー」ボタンを押して、コピーしたURLを貼り付けてください。
 							URL は <code>https://media.sono-music.com/users/○○○</code> の形式です。末尾の <code>○○○</code> の部分だけを入力しても設定できます。
@@ -524,10 +524,10 @@ final class Sono_Media_Events {
 					</td>
 				</tr>
 				<tr>
-					<th scope="row">
+					<th scope="row" class="sono-events-admin__cell">
 						<label for="sono-events-empty">イベントがないときに表示する文</label>
 					</th>
-					<td>
+					<td class="sono-events-admin__cell">
 						<input
 							type="text"
 							id="sono-events-empty"
@@ -537,7 +537,7 @@ final class Sono_Media_Events {
 							autocomplete="off"
 							aria-describedby="sono-events-empty-help"
 						/>
-						<p class="description" id="sono-events-empty-help">
+						<p class="description sono-events-admin__text --help" id="sono-events-empty-help">
 							表示するイベントがないときに、一覧の代わりに表示する文です。空欄にすると、何も表示しません。
 							sono media に接続できないときは表示されません。
 							ショートコードの <code>empty</code> 属性で、一覧ごとに変更することもできます。
@@ -555,7 +555,7 @@ final class Sono_Media_Events {
 	private static function render_tab_style() {
 		$style = self::get_style();
 		?>
-		<p>
+		<p class="sono-events-admin__text">
 			変更したい項目だけを入力してください。空欄の項目には、お使いのテーマのデザインが適用されます。
 			色は「この色を指定する」にチェックを入れた項目だけが適用されます。
 		</p>
@@ -569,8 +569,8 @@ final class Sono_Media_Events {
 					$name  = self::OPTION . '[style][' . $key . ']';
 					?>
 					<tr>
-						<th scope="row"><label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label></th>
-						<td>
+						<th scope="row" class="sono-events-admin__cell"><label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label></th>
+						<td class="sono-events-admin__cell">
 							<?php if ( 'color' === $field['type'] ) : ?>
 								<?php
 								// ★ 色は自由入力にせず選ばせる（書き方の間違いが起こらない）。
@@ -603,7 +603,7 @@ final class Sono_Media_Events {
 									value="<?php echo esc_attr( $value ); ?>" class="small-text"
 									placeholder="<?php echo esc_attr( isset( $field['placeholder'] ) ? $field['placeholder'] : '' ); ?>"
 									aria-describedby="<?php echo esc_attr( $id . '-help' ); ?>" />
-								<span class="description" id="<?php echo esc_attr( $id . '-help' ); ?>">
+								<span class="description sono-events-admin__text" id="<?php echo esc_attr( $id . '-help' ); ?>">
 									<?php
 									echo esc_html(
 										'ratio' === $field['type'] ? '例: 4 / 5、1 / 1、16 / 9'
@@ -662,31 +662,31 @@ final class Sono_Media_Events {
 			),
 		);
 		?>
-		<p>投稿または固定ページに、次の表のショートコードを入力してください。</p>
+		<p class="sono-events-admin__text">投稿または固定ページに、次の表のショートコードを入力してください。</p>
 		<div class="sono-events-admin__table">
 		<table class="widefat striped">
 			<thead>
 				<tr>
-					<th scope="col">用途</th>
-					<th scope="col">ショートコード</th>
+					<th scope="col" class="sono-events-admin__tableCell">用途</th>
+					<th scope="col" class="sono-events-admin__tableCell">ショートコード</th>
 				</tr>
 			</thead>
 			<tbody>
 				<?php foreach ( $rows as $row ) : ?>
 					<tr>
-						<td>
+						<td class="sono-events-admin__tableCell">
 							<?php echo esc_html( $row[0] ); ?>
 							<?php if ( '' !== $row[2] ) : ?>
-								<br /><span class="description"><?php echo esc_html( $row[2] ); ?></span>
+								<br /><span class="description sono-events-admin__text"><?php echo esc_html( $row[2] ); ?></span>
 							<?php endif; ?>
 						</td>
-						<td class="sono-events-admin__code"><code><?php echo esc_html( $row[1] ); ?></code></td>
+						<td class="sono-events-admin__tableCell sono-events-admin__code"><code><?php echo esc_html( $row[1] ); ?></code></td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
 		</table>
 		</div>
-		<p class="description">
+		<p class="description sono-events-admin__text --after">
 			すべてのオプションと表示内容の詳細は、<a href="https://github.com/miryna1978/sono-media-events#readme" target="_blank" rel="noopener">README（GitHub）</a>を参照してください。
 		</p>
 		<?php
@@ -721,13 +721,13 @@ final class Sono_Media_Events {
 			),
 		);
 		?>
-		<p>sono が配布しているプラグインです。このサイトで併用できます。</p>
+		<p class="sono-events-admin__text">sono が配布しているプラグインです。このサイトで併用できます。</p>
 		<?php foreach ( $services as $service ) : ?>
 			<?php $active = function_exists( 'is_plugin_active' ) && is_plugin_active( $service['file'] ); ?>
 			<div class="card sono-events-admin__card">
-				<h2><?php echo esc_html( $service['name'] ); ?></h2>
-				<p><?php echo esc_html( $service['desc'] ); ?></p>
-				<p>
+				<h2 class="sono-events-admin__heading"><?php echo esc_html( $service['name'] ); ?></h2>
+				<p class="sono-events-admin__text"><?php echo esc_html( $service['desc'] ); ?></p>
+				<p class="sono-events-admin__text">
 					<?php if ( $active ) : ?>
 						<span class="sono-events-admin__active">有効化済み</span>
 						<a class="button button-secondary" href="<?php echo esc_url( admin_url( 'options-general.php?page=' . $service['page'] ) ); ?>">設定画面を開く</a>
@@ -753,7 +753,7 @@ final class Sono_Media_Events {
 	 */
 	private static function render_status( $slug ) {
 		if ( '' === $slug ) {
-			echo '<div class="notice notice-info inline"><p>プロフィールを設定すると、取得できたイベントの件数がここに表示されます。</p></div>';
+			echo '<div class="notice notice-info inline"><p class="sono-events-admin__text">プロフィールを設定すると、取得できたイベントの件数がここに表示されます。</p></div>';
 			return;
 		}
 
@@ -762,13 +762,13 @@ final class Sono_Media_Events {
 		$fetched = self::fetch( $slug, self::DEFAULT_LIMIT, 1, false );
 
 		if ( null === $fetched ) {
-			echo '<div class="notice notice-warning inline"><p>sono media に接続できませんでした。プロフィールの設定が誤っているとは限りません。しばらく時間をおいてから、このページを再読み込みしてください。</p></div>';
+			echo '<div class="notice notice-warning inline"><p class="sono-events-admin__text">sono media に接続できませんでした。プロフィールの設定が誤っているとは限りません。しばらく時間をおいてから、このページを再読み込みしてください。</p></div>';
 			self::render_flush_button();
 			return;
 		}
 
 		if ( empty( $fetched['profileUrl'] ) ) {
-			echo '<div class="notice notice-warning inline"><p>プロフィールが見つかりませんでした。sono media のアカウント画面の「プロフィールのURLをコピー」ボタンでURLをコピーし直して、貼り付けてください。</p></div>';
+			echo '<div class="notice notice-warning inline"><p class="sono-events-admin__text">プロフィールが見つかりませんでした。sono media のアカウント画面の「プロフィールのURLをコピー」ボタンでURLをコピーし直して、貼り付けてください。</p></div>';
 			self::render_flush_button();
 			return;
 		}
@@ -785,7 +785,7 @@ final class Sono_Media_Events {
 				$notes[] = '開催予定のイベントはありません。終了したイベントを表示するには past="true" を指定してください。';
 			}
 			printf(
-				'<div class="notice notice-success inline"><p>%s件のイベントを取得しました（開催予定 %s件、終了 %s件）。%s<a href="%s" target="_blank" rel="noopener">プロフィールを開く</a></p></div>',
+				'<div class="notice notice-success inline"><p class="sono-events-admin__text">%s件のイベントを取得しました（開催予定 %s件、終了 %s件）。%s<a href="%s" target="_blank" rel="noopener">プロフィールを開く</a></p></div>',
 				esc_html( (string) ( $upcoming + $past ) ),
 				esc_html( (string) $upcoming ),
 				esc_html( (string) $past ),
@@ -793,13 +793,13 @@ final class Sono_Media_Events {
 				$notes ? esc_html( implode( '', $notes ) ) . ' ' : '',
 				esc_url( $fetched['profileUrl'] )
 			);
-			echo '<p class="description">関連ユーザーに登録されたイベントは、標準で一覧に表示されます。表示しない場合は、sono media のアカウント画面のイベントタブにある「関連ユーザーに登録されたイベント」で非表示に設定できます。</p>';
+			echo '<p class="description sono-events-admin__text --status">関連ユーザーに登録されたイベントは、標準で一覧に表示されます。表示しない場合は、sono media のアカウント画面のイベントタブにある「関連ユーザーに登録されたイベント」で非表示に設定できます。</p>';
 			self::render_flush_button();
 			return;
 		}
 
 		printf(
-			'<div class="notice notice-warning inline"><p>プロフィールは見つかりましたが、表示できるイベントがありません。sono media にイベントが掲載されると表示されます。 <a href="%s" target="_blank" rel="noopener">プロフィールを開く</a></p></div>',
+			'<div class="notice notice-warning inline"><p class="sono-events-admin__text">プロフィールは見つかりましたが、表示できるイベントがありません。sono media にイベントが掲載されると表示されます。 <a href="%s" target="_blank" rel="noopener">プロフィールを開く</a></p></div>',
 			esc_url( $fetched['profileUrl'] )
 		);
 		self::render_flush_button();
@@ -814,7 +814,7 @@ final class Sono_Media_Events {
 	 */
 	private static function render_flush_button() {
 		// フォームの外にある render_flush_form の form を、form 属性で参照する
-		echo '<p><button type="submit" form="sono-events-flush-form" class="button button-secondary">表示を今すぐ更新する</button></p>';
+		echo '<p class="sono-events-admin__text --status"><button type="submit" form="sono-events-flush-form" class="button button-secondary">表示を今すぐ更新する</button></p>';
 	}
 
 	/**
@@ -1163,6 +1163,7 @@ final class Sono_Media_Events {
 		ob_start();
 		?>
 		<div class="sono-events">
+			<?php // lint-markup-ignore: PHP の値（列数）を CSS 変数 --sono-events-columns に渡すだけ。値ごとのクラスは作れず、配布先のテーマの CSS にも頼れない ?>
 			<ul class="sono-events__list" style="--sono-events-columns: <?php echo esc_attr( (string) $columns ); ?>;">
 				<?php foreach ( $data['events'] as $event ) : ?>
 					<li class="sono-events__item">
@@ -1172,7 +1173,7 @@ final class Sono_Media_Events {
 							//   読み上げとキーボードに同じリンクを二度渡さないよう外す。
 							//   alt も空（タイトルのテキストが下にあるため）。
 							?>
-							<a class="sono-events__imagelink" href="<?php echo esc_url( $event['url'] ); ?>" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+							<a class="sono-events__imagelink sono-events__link" href="<?php echo esc_url( $event['url'] ); ?>" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
 								<img
 									class="sono-events__image"
 									src="<?php echo esc_url( $event['image']['url'] ); ?>"
@@ -1190,7 +1191,7 @@ final class Sono_Media_Events {
 						<?php echo self::render_dates( $event['dates'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 中で esc 済み ?>
 
 						<p class="sono-events__title">
-							<a href="<?php echo esc_url( $event['url'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $event['title'] ); ?></a>
+							<a class="sono-events__titleLink" href="<?php echo esc_url( $event['url'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $event['title'] ); ?></a>
 						</p>
 
 						<?php if ( '' !== $event['placeName'] ) : ?>
@@ -1201,7 +1202,7 @@ final class Sono_Media_Events {
 							<?php if ( '' !== $event['ticketUrl'] ) : ?>
 								<a class="sono-events__ticket" href="<?php echo esc_url( $event['ticketUrl'] ); ?>" target="_blank" rel="noopener">チケット</a>
 							<?php endif; ?>
-							<a class="sono-events__detail" href="<?php echo esc_url( $event['url'] ); ?>" target="_blank" rel="noopener">詳細を見る</a>
+							<a class="sono-events__detail sono-events__link" href="<?php echo esc_url( $event['url'] ); ?>" target="_blank" rel="noopener">詳細を見る</a>
 						</p>
 					</li>
 				<?php endforeach; ?>
@@ -1213,7 +1214,7 @@ final class Sono_Media_Events {
 			?>
 			<?php if ( $profile_url ) : ?>
 				<p class="sono-events__more">
-					<a href="<?php echo esc_url( $profile_url ); ?>" target="_blank" rel="noopener">sono media ですべて見る</a>
+					<a class="sono-events__link" href="<?php echo esc_url( $profile_url ); ?>" target="_blank" rel="noopener">sono media ですべて見る</a>
 				</p>
 			<?php endif; ?>
 		</div>
@@ -1314,10 +1315,10 @@ final class Sono_Media_Events {
 		ob_start();
 		?>
 		<nav class="sono-events__pager" aria-label="イベント一覧のページ送り">
-			<ul>
+			<ul class="sono-events__pagerList">
 				<?php if ( $current > 1 ) : ?>
 					<li class="sono-events__pagerside">
-						<a href="<?php echo esc_url( $href( $current - 1 ) ); ?>" rel="prev">前へ</a>
+						<a class="sono-events__pagerLink" href="<?php echo esc_url( $href( $current - 1 ) ); ?>" rel="prev">前へ</a>
 					</li>
 				<?php endif; ?>
 
@@ -1332,7 +1333,7 @@ final class Sono_Media_Events {
 								<span aria-hidden="true"><?php echo esc_html( (string) $n ); ?></span>
 							</span>
 						<?php else : ?>
-							<a href="<?php echo esc_url( $href( $n ) ); ?>">
+							<a class="sono-events__pagerLink" href="<?php echo esc_url( $href( $n ) ); ?>">
 								<span class="screen-reader-text"><?php echo esc_html( $n . 'ページ目' ); ?></span>
 								<span aria-hidden="true"><?php echo esc_html( (string) $n ); ?></span>
 							</a>
@@ -1342,7 +1343,7 @@ final class Sono_Media_Events {
 
 				<?php if ( $current < $total_pages ) : ?>
 					<li class="sono-events__pagerside">
-						<a href="<?php echo esc_url( $href( $current + 1 ) ); ?>" rel="next">次へ</a>
+						<a class="sono-events__pagerLink" href="<?php echo esc_url( $href( $current + 1 ) ); ?>" rel="next">次へ</a>
 					</li>
 				<?php endif; ?>
 			</ul>

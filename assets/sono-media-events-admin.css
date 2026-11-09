@@ -6,34 +6,61 @@
  *   他の管理画面や他のプラグインの画面に影響させない。
  * ★ やることは行間と余白を広げるだけ。WordPress 標準の見た目（nav-tab・form-table・
  *   notice・button）は変えない。!important は使わない。
+ * ★ 要素（p・th・td・h2）には直接スタイルを当てず、PHP 側でクラスを振っている。
+ *   sono-events-admin__text（文章の段落・補足）、__cell（設定の表のセル）、
+ *   __tableCell（使い方の表のセル）、__heading（カードの見出し）。
  */
 
-.sono-events-admin p,
-.sono-events-admin .description,
-.sono-events-admin li {
+.sono-events-admin .sono-events-admin__text {
+  margin: 1em 0;
   line-height: 1.7;
+}
+
+/* 保存ボタンの行と WordPress 標準の通知の段落にも、文章と同じ余白を持たせる。
+   理由：どちらも WordPress が出力する HTML で、class を付けられない
+   （`p.submit`、保存後の「Settings saved.」の `.notice p`）。以前は `.sono-events-admin p` が当たっていた。
+   要素セレクタ（p）は、その WordPress の出力に合わせるための例外 */
+/* stylelint-disable selector-max-type */
+.sono-events-admin .submit,
+.sono-events-admin .notice p {
+  margin: 1em 0;
+  line-height: 1.7;
+}
+/* stylelint-enable selector-max-type */
+
+/* 設定の行の中の補足（入力欄の下）。
+   下の余白 0 は消せない：WordPress の `.form-table td p` は下 0 だが、こちらの
+   `.sono-events-admin__text`（margin: 1em 0）のほうが強く、消すと下が 14px になる
+   （設定タブの補足文で実測。1.1.0 は 0）。 */
+.sono-events-admin .sono-events-admin__text.--help {
+  margin-top: 0.75em;
+  margin-bottom: 0;
+}
+
+/* 表の直後の補足 */
+.sono-events-admin .sono-events-admin__text.--after {
+  margin-top: 1.25em;
+}
+
+/* 状態の通知の下のボタン行。
+   この規則は消せない：消すと `.sono-events-admin__text` の 1em が勝ち、上下とも 14px になる
+   （「表示を今すぐ更新する」の行で実測。1.1.0 は WordPress の `.form-table td p` で上 4px・下 0）。 */
+.sono-events-admin .sono-events-admin__text.--status {
+  margin: 0.25rem 0 0;
+}
+
+/* 状態の下の補足文（description）は、設定の行の補足と同じく上 0.75em */
+.sono-events-admin .sono-events-admin__text.--status.description {
+  margin-top: 0.75em;
 }
 
 .sono-events-admin .nav-tab-wrapper {
   margin-bottom: 1.5em;
 }
 
-.sono-events-admin p {
-  margin: 1em 0;
-}
-
-.sono-events-admin h2 {
-  margin: 2.5em 0 1em;
-}
-
-.sono-events-admin .form-table th,
-.sono-events-admin .form-table td {
+.sono-events-admin .sono-events-admin__cell {
   padding-top: 1.1em;
   padding-bottom: 1.1em;
-}
-
-.sono-events-admin .form-table td .description {
-  margin-top: 0.75em;
 }
 
 /* 状態の通知（設定の行の中・確認結果） */
@@ -47,17 +74,13 @@
   padding-bottom: 0.25em;
 }
 
-.sono-events-admin__status > p {
-  margin: 0.75em 0 0;
-}
-
 /* 入力欄とボタンを同じ行に並べ、高さを揃える */
-.sono-events-admin .form-table td .regular-text + .button {
+.sono-events-admin .form-table .regular-text + .button {
   margin-left: 0.5em;
   vertical-align: middle;
 }
 
-.sono-events-admin .form-table td .regular-text {
+.sono-events-admin .form-table .regular-text {
   vertical-align: middle;
 }
 
@@ -67,8 +90,7 @@
   overflow-x: auto;
 }
 
-.sono-events-admin table.widefat th,
-.sono-events-admin table.widefat td {
+.sono-events-admin .sono-events-admin__tableCell {
   padding: 0.9em 1em;
   line-height: 1.7;
 }
@@ -78,15 +100,6 @@
   white-space: nowrap;
 }
 
-.sono-events-admin__code code {
-  white-space: nowrap;
-}
-
-.sono-events-admin table.widefat + .description,
-.sono-events-admin__table + .description {
-  margin-top: 1.25em;
-}
-
 /* 関連サービスのカード */
 .sono-events-admin .card.sono-events-admin__card {
   max-width: 40em;
@@ -94,7 +107,7 @@
   padding: 0.5em 1.5em 0.75em;
 }
 
-.sono-events-admin__card h2 {
+.sono-events-admin .sono-events-admin__heading {
   margin: 0.75em 0 0.5em;
 }
 
